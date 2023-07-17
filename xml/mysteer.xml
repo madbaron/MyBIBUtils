@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+
+  <constants>
+  </constants>
+  
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+  <!-- == List of processors to execute                                                                      == -->
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+
+  <execute>
+
+    <!-- ==========  Overlay  ========== -->
+    <processor name="MyHitSelector"/>
+
+    <!-- ==========  Output  ========== -->
+    <processor name="Output_REC"/>
+
+  </execute>
+
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+  <!-- == Input configuration                                                                               == -->
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+
+  <global>
+    <parameter name="LCIOInputFiles">
+      /data/C1C1/withOverlay/C1C1_BIB_2940.slcio 
+    </parameter>
+    <!--parameter name="LCIOInputFiles">
+      /data/C1C1/sim/C1C1_sim_02.slcio
+    </parameter-->
+    <!-- Limit the number of processed records (run+evt): -->
+    <parameter name="MaxRecordNumber" value="2" />
+    <parameter name="SkipNEvents" value="0" />l
+    <parameter name="SupressCheck" value="false" />  
+    <parameter name="Verbosity" options="DEBUG0-9,MESSAGE0-9,WARNING0-9,ERROR0-9,SILENT">MESSAGE </parameter>
+    <parameter name="RandomSeed" value="1234567890" />
+  </global>
+
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+  <!-- == Hit Selector config                                                                             == -->
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+
+  <processor name="MyHitSelector" type="HitSelector">
+  <!--HitSelector applies selections to reduce the BIB-->
+  <!--Name of the TrackerHit input collections-->
+  <parameter name="TrackerHitCollectionNames" type="StringVec" lcioInType="TrackerHitPlane">VertexBarrelCollection InnerTrackerBarrelCollection  </parameter>
+  <!--Good hits from ITracker-->
+  <parameter name="InnerTrackerBarrelGoodCollection" type="string" lcioOutType="TrackerHitPlane">InnerTrackerBarrelGoodCollection </parameter>
+  <!--Good hits from VXDTracker first layer-->
+  <parameter name="VertexBarrelL0GoodCollection" type="string" lcioOutType="TrackerHitPlane">VertexBarrelL0GoodCollection </parameter>
+  <!--Good hits from VXDTracker-->
+  <parameter name="VertexBarrelL1L3GoodCollection" type="string" lcioOutType="TrackerHitPlane">VertexBarrelL1L3GoodCollection </parameter>
+  <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+  <parameter name="Verbosity" type="string">MESSAGE </parameter>
+  </processor>
+
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+  <!-- == Output configuration                                                                               == -->
+  <!-- ======================================================================================================== -->
+  <!-- ======================================================================================================== -->
+
+  <processor name="Output_REC" type="LCIOOutputProcessor">
+    <!--   standard output: full reconstruction keep all collections -->
+    <parameter name="LCIOOutputFile" type="string"> test.slcio </parameter>
+    <parameter name="FullSubsetCollections" type="StringVec"> EfficientMCParticles InefficientMCParticles </parameter>
+    <parameter name="LCIOWriteMode" type="string" value="WRITE_NEW"/>
+    <!-- <parameter name="SplitFileSizekB" type="int">996147 </parameter> -->
+    <parameter name="Verbosity" type="string">DEBUG </parameter>
+    <parameter name="DropCollectionNames" type="StringVec">  </parameter>
+    <parameter name="DropCollectionTypes" type="StringVec">SimCalorimeterHit  </parameter>
+    <parameter name="KeepCollectionNames" type="StringVec">  </parameter>
+  </processor>
+
+</marlin>
