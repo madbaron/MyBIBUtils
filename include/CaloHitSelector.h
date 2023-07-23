@@ -60,9 +60,11 @@ protected:
   // Collection names for (in/out)put
   std::string m_inputHitCollection = "";
   std::string m_outputHitCollection = "";
+  std::string m_inputRelationCollection = "";
+  std::string m_outputRelationCollection = "";
 
-  int m_Nlayer;
-  int m_Nsigma;
+  int m_Nlayer = 50;
+  int m_Nsigma = 3;
 
   int _nRun{};
   int _nEvt{};

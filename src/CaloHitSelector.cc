@@ -13,6 +13,7 @@
 #include <UTIL/CellIDDecoder.h>
 #include <UTIL/CellIDEncoder.h>
 #include <UTIL/LCTrackerConf.h>
+#include <IMPL/LCRelationImpl.h>
 
 #include "TMath.h"
 #include "TH1D.h"
@@ -45,6 +46,18 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                m_outputHitCollection,
                                std::string("EcalBarrelCollectionSel"));
 
+    // Input relation collection
+    registerProcessorParameter("CaloRelationCollectionName",
+                               "Name of the CalorimeterHit input relation collection",
+                               m_inputRelationCollection,
+                               std::string("EcalBarrelRelationsSimRec"));
+
+    // Output relation collection
+    registerProcessorParameter("GoodRelationCollection",
+                               "Good hits SimRec relations",
+                               m_outputRelationCollection,
+                               std::string("EcalBarrelRelationsSimSel"));
+
     // N calo layers
     registerProcessorParameter("Nlayers",
                                "Number of calorimeter layers",
@@ -52,7 +65,7 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                50);
 
     // N sigma for dynamic threshold
-    registerProcessorParameter("N sigma",
+    registerProcessorParameter("Nsigma",
                                "Number of BIB E sigma",
                                m_Nsigma,
                                3);
@@ -79,19 +92,27 @@ void CaloHitSelector::processRunHeader(LCRunHeader *run)
 void CaloHitSelector::processEvent(LCEvent *evt)
 {
 
-    streamlog_out(DEBUG8) << "Processing event " << _nEvt << std::endl;
+    streamlog_out(DEBUG) << "Processing event " << _nEvt << std::endl;
 
     // Get the collection of calo hits
     LCCollection *caloHitCollection = 0;
     getCollection(caloHitCollection, m_inputHitCollection, evt);
+
+    LCCollection *inputHitRel = 0;
+    getCollection(inputHitRel, m_inputRelationCollection, evt);
 
     std::string encoderString = caloHitCollection->getParameters().getStringVal("CellIDEncoding");
     UTIL::CellIDDecoder<CalorimeterHit> myCellIDEncoding(encoderString);
 
     // Make the output collections
     LCCollectionVec *GoodHitsCollection = new LCCollectionVec(caloHitCollection->getTypeName());
-    GoodHitsCollection->setSubset(true);
+    GoodHitsCollection->setSubset(false);
     GoodHitsCollection->parameters().setValue("CellIDEncoding", encoderString);
+
+    // reco-sim relation output collections
+    LCCollectionVec *outputHitRel = new LCCollectionVec(inputHitRel->getTypeName());
+    LCFlagImpl lcFlag_rel(inputHitRel->getFlag());
+    outputHitRel->setFlag(lcFlag_rel.getFlag());
 
     std::vector<double> arrBins_theta = {0., 30. * TMath::Pi() / 180., 40. * TMath::Pi() / 180., 50. * TMath::Pi() / 180., 60. * TMath::Pi() / 180., 70. * TMath::Pi() / 180.,
                                          90. * TMath::Pi() / 180., 110. * TMath::Pi() / 180., 120. * TMath::Pi() / 180., 130. * TMath::Pi() / 180., 140. * TMath::Pi() / 180., 150. * TMath::Pi() / 180., TMath::Pi()};
@@ -99,7 +120,8 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     std::vector<TH2D *> layer_map;
     for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
     {
-        TString name = 'hit_E_vs_theta_layer' + iLayer;
+        TString name;
+        name.Form("%s%s%i", m_inputHitCollection, "hit_E_vs_theta_layer_", iLayer);
         TH2D *histo = new TH2D(name, name, arrBins_theta.size() - 1, arrBins_theta.data(), 100, 0, 0.1);
         layer_map.push_back(histo);
     }
@@ -126,15 +148,23 @@ void CaloHitSelector::processEvent(LCEvent *evt)
 
     // Now extract thresholds
     std::vector<std::vector<double>> threshold_map;
+    std::vector<std::vector<double>> correction_map;
     for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
     {
         std::vector<double> threshold_map_theta;
-        for (int iBin = 0; iBin < arrBins_theta.size() - 1; iBin++)
+        std::vector<double> correction_map_theta;
+        size_t maxBin = arrBins_theta.size() - 1;
+        for (size_t iBin = 0; iBin < maxBin; iBin++)
         {
-            TH1D *h_my_proj = layer_map[iLayer]->ProjectionY("_py", iBin, iBin + 1);
+            TString name_proj;
+            name_proj.Form("%s%li", "_py_", iBin);
+            TH1D *h_my_proj = layer_map[iLayer]->ProjectionY(name_proj, iBin, iBin + 1);
             threshold_map_theta.push_back(h_my_proj->GetMean() + m_Nsigma * h_my_proj->GetStdDev());
+            correction_map_theta.push_back(h_my_proj->GetMean());
+            delete h_my_proj;
         }
         threshold_map.push_back(threshold_map_theta);
+        correction_map.push_back(correction_map_theta);
     }
 
     // Now loop over hits again applying threshold
@@ -162,19 +192,34 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             hit_new->setRawHit(hit->getRawHit());
             hit_new->setPosition(hit->getPosition());
             hit_new->setTime(hit->getTime());
-            hit_new->setEnergy(hit->getEnergy() - threshold_map[layer][binx - 1]);
+            hit_new->setEnergy(hit->getEnergy() - correction_map[layer][binx - 1]);
             hit_new->setEnergyError(hit->getEnergyError());
 
             GoodHitsCollection->addElement(hit_new);
+
+            LCRelation *rel = dynamic_cast<LCRelation *>(inputHitRel->getElementAt(itHit));
+            LCRelationImpl *rel_new = new LCRelationImpl();
+
+            rel_new->setFrom(hit_new);
+            rel_new->setTo(rel->getTo());
+            rel_new->setWeight(rel->getWeight());
+
+            outputHitRel->addElement(rel_new);
         }
     }
 
     // Store the filtered hit collections
     evt->addCollection(GoodHitsCollection, m_outputHitCollection);
+    evt->addCollection(outputHitRel, m_outputRelationCollection);
 
     //-- note: this will not be printed if compiled w/o MARLINDEBUG=1 !
     streamlog_out(DEBUG) << "   done processing event: " << evt->getEventNumber()
                          << "   in run:  " << evt->getRunNumber() << std::endl;
+
+    for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
+    {
+        delete layer_map[iLayer];
+    }
 
     _nEvt++;
 }
@@ -186,7 +231,6 @@ void CaloHitSelector::check(LCEvent *evt)
 
 void CaloHitSelector::end()
 {
-
     //   std::cout << "CaloHitSelector::end()  " << name()
     // 	    << " processed " << _nEvt << " events in " << _nRun << " runs "
     // 	    << std::endl ;
