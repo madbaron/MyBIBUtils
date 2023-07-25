@@ -111,6 +111,8 @@ void CaloHitSelector::processEvent(LCEvent *evt)
 
     // reco-sim relation output collections
     LCCollectionVec *outputHitRel = new LCCollectionVec(inputHitRel->getTypeName());
+    outputHitRel->parameters().setValue("FromType", inputHitRel->parameters().getStringVal("FromType"));
+    outputHitRel->parameters().setValue("ToType", inputHitRel->parameters().getStringVal("ToType"));
     LCFlagImpl lcFlag_rel(inputHitRel->getFlag());
     outputHitRel->setFlag(lcFlag_rel.getFlag());
 
@@ -236,7 +238,7 @@ void CaloHitSelector::end()
     // 	    << std::endl ;
 }
 
-void CaloHitSelector::getCollection(LCCollection *&collection, std::string collectionName, LCEvent *evt)
+void CaloHitSelector::getCollection(LCCollection *&collection, const std::string& collectionName, LCEvent *evt)
 {
     try
     {
