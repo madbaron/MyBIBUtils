@@ -15,9 +15,9 @@
 #include <UTIL/LCTrackerConf.h>
 #include <IMPL/LCRelationImpl.h>
 
-#include "TMath.h"
+#include <marlin/AIDAProcessor.h>
+
 #include "TH1D.h"
-#include "TH2D.h"
 #include "TVector3.h"
 
 // ----- include for verbosity dependend logging ---------
@@ -69,6 +69,11 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                "Number of BIB E sigma",
                                m_Nsigma,
                                3);
+
+    registerProcessorParameter("SaveThresholdHistogram",
+                               "Flag to save the threshold histogram",
+                               m_fillHistos,
+                               false);
 }
 
 void CaloHitSelector::init()
@@ -81,6 +86,20 @@ void CaloHitSelector::init()
 
     _nRun = 0;
     _nEvt = 0;
+
+    // --- Initialize the AIDAProcessor and book the diagnostic histograms:
+
+    AIDAProcessor::histogramFactory(this);
+
+    size_t nThetaBins = arrBins_theta.size() - 1;
+
+    TString th_name;
+    th_name.Form("%s%s", this->name(), "_threshold_vs_theta_layer");
+    m_thresholdMap = new TH2D(th_name, th_name, nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
+
+    TString corr_name;
+    corr_name.Form("%s%s", this->name(), "_correction_vs_theta_layer");
+    m_correctionMap = new TH2D(corr_name, corr_name, nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
 }
 
 void CaloHitSelector::processRunHeader(LCRunHeader *run)
@@ -115,9 +134,6 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     outputHitRel->parameters().setValue("ToType", inputHitRel->parameters().getStringVal("ToType"));
     LCFlagImpl lcFlag_rel(inputHitRel->getFlag());
     outputHitRel->setFlag(lcFlag_rel.getFlag());
-
-    std::vector<double> arrBins_theta = {0., 30. * TMath::Pi() / 180., 40. * TMath::Pi() / 180., 50. * TMath::Pi() / 180., 60. * TMath::Pi() / 180., 70. * TMath::Pi() / 180.,
-                                         90. * TMath::Pi() / 180., 110. * TMath::Pi() / 180., 120. * TMath::Pi() / 180., 130. * TMath::Pi() / 180., 140. * TMath::Pi() / 180., 150. * TMath::Pi() / 180., TMath::Pi()};
 
     std::vector<TH2D *> layer_map;
     for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
@@ -210,6 +226,19 @@ void CaloHitSelector::processEvent(LCEvent *evt)
         }
     }
 
+    if (m_fillHistos)
+    {
+        for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
+        {
+            size_t maxBin = arrBins_theta.size() - 1;
+            for (size_t iBin = 0; iBin < maxBin; iBin++)
+            {
+                m_thresholdMap->Fill(iBin, iLayer, threshold_map[iLayer][iBin]);
+                m_correctionMap->Fill(iBin, iLayer, correction_map[iLayer][iBin]);
+            }
+        }
+    }
+
     // Store the filtered hit collections
     evt->addCollection(GoodHitsCollection, m_outputHitCollection);
     evt->addCollection(outputHitRel, m_outputRelationCollection);
@@ -233,7 +262,7 @@ void CaloHitSelector::end()
     // 	    << std::endl ;
 }
 
-void CaloHitSelector::getCollection(LCCollection *&collection, const std::string& collectionName, LCEvent *evt)
+void CaloHitSelector::getCollection(LCCollection *&collection, const std::string &collectionName, LCEvent *evt)
 {
     try
     {

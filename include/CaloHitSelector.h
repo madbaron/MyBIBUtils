@@ -5,6 +5,8 @@
 #include "lcio.h"
 
 #include <string>
+#include "TH2D.h"
+#include "TMath.h"
 
 using namespace lcio;
 using namespace marlin;
@@ -54,7 +56,7 @@ public:
   virtual void end();
 
   // Call to get collections
-  void getCollection(LCCollection *&, const std::string&, LCEvent *);
+  void getCollection(LCCollection *&, const std::string &, LCEvent *);
 
 protected:
   // Collection names for (in/out)put
@@ -65,9 +67,17 @@ protected:
 
   int m_Nlayer = 50;
   int m_Nsigma = 3;
+  std::vector<double> arrBins_theta = {0., 30. * TMath::Pi() / 180., 40. * TMath::Pi() / 180., 50. * TMath::Pi() / 180., 60. * TMath::Pi() / 180., 70. * TMath::Pi() / 180.,
+                                       90. * TMath::Pi() / 180., 110. * TMath::Pi() / 180., 120. * TMath::Pi() / 180., 130. * TMath::Pi() / 180., 140. * TMath::Pi() / 180., 150. * TMath::Pi() / 180., TMath::Pi()};
+
+  bool m_fillHistos = false;
 
   int _nRun{};
   int _nEvt{};
+
+  // --- Output threshold histograms:
+  TH2D *m_thresholdMap = nullptr;
+  TH2D *m_correctionMap = nullptr;
 };
 
 #endif
