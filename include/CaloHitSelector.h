@@ -54,7 +54,7 @@ public:
   virtual void end();
 
   // Call to get collections
-  void getCollection(LCCollection *&, std::string, LCEvent *);
+  void getCollection(LCCollection *&, const std::string&, LCEvent *);
 
 protected:
   // Collection names for (in/out)put
