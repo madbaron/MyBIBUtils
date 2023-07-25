@@ -216,11 +216,6 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     streamlog_out(DEBUG) << "   done processing event: " << evt->getEventNumber()
                          << "   in run:  " << evt->getRunNumber() << std::endl;
 
-    for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
-    {
-        delete layer_map[iLayer];
-    }
-
     _nEvt++;
 }
 
