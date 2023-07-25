@@ -70,8 +70,9 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                m_Nsigma,
                                3);
 
-    registerProcessorParameter("SaveThresholdHistogram",
-                               "Flag to save the threshold histogram",
+    // Save histograms
+    registerProcessorParameter("SaveHistograms",
+                               "Flag to save the threshold histograms",
                                m_fillHistos,
                                false);
 }
@@ -92,14 +93,8 @@ void CaloHitSelector::init()
     AIDAProcessor::histogramFactory(this);
 
     size_t nThetaBins = arrBins_theta.size() - 1;
-
-    TString th_name;
-    th_name.Form("%s%s", this->name(), "_threshold_vs_theta_layer");
-    m_thresholdMap = new TH2D(th_name, th_name, nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
-
-    TString corr_name;
-    corr_name.Form("%s%s", this->name(), "_correction_vs_theta_layer");
-    m_correctionMap = new TH2D(corr_name, corr_name, nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
+    m_thresholdMap = new TH2D("Threshold_vs_theta_layer", "Threshold_vs_theta_layer", nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
+    m_correctionMap = new TH2D("Correction_vs_theta_layer", "Correction_vs_theta_layer", nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
 }
 
 void CaloHitSelector::processRunHeader(LCRunHeader *run)
@@ -233,6 +228,7 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             size_t maxBin = arrBins_theta.size() - 1;
             for (size_t iBin = 0; iBin < maxBin; iBin++)
             {
+                streamlog_out(DEBUG) << "Filling Histo Bin " << iBin << " " << iLayer << std::endl;
                 m_thresholdMap->Fill(iBin, iLayer, threshold_map[iLayer][iBin]);
                 m_correctionMap->Fill(iBin, iLayer, correction_map[iLayer][iBin]);
             }
