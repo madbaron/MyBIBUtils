@@ -228,7 +228,6 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             size_t maxBin = arrBins_theta.size() - 1;
             for (size_t iBin = 0; iBin < maxBin; iBin++)
             {
-                streamlog_out(DEBUG) << "Filling Histo Bin " << iBin << " " << iLayer << std::endl;
                 m_thresholdMap->Fill(iBin, iLayer, threshold_map[iLayer][iBin]);
                 m_correctionMap->Fill(iBin, iLayer, correction_map[iLayer][iBin]);
             }
