@@ -35,6 +35,8 @@ INCLUDE_DIRECTORIES(SYSTEM ${ROOT_INCLUDE_DIRS})
 LINK_LIBRARIES(${ROOT_LIBRARIES})
 ADD_DEFINITIONS(${ROOT_DEFINITIONS})
 
+INCLUDE(GNUInstallDirs)
+
 # optional package
 # FIND_PACKAGE( AIDA )
 # IF( AIDA_FOUND )
@@ -52,6 +54,9 @@ OPTION(INSTALL_DOC "Set to OFF to skip build/install Documentation" OFF)
 IF(INSTALL_DOC AND EXISTS "${PROJECT_SOURCE_DIR}/doc/CMakeLists.txt")
     ADD_SUBDIRECTORY(./doc)
 ENDIF()
+
+# ## DATA ###########################################################
+ADD_SUBDIRECTORY(data)
 
 # ## LIBRARY #################################################################
 

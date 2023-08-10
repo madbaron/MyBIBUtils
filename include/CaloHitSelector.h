@@ -7,6 +7,7 @@
 #include <string>
 #include "TH2D.h"
 #include "TMath.h"
+#include "TFile.h"
 
 using namespace lcio;
 using namespace marlin;
@@ -24,7 +25,7 @@ using namespace marlin;
  *
  * @param CollectionName Name of the MCParticle collection
  *
- * @author F. Meloni, DESY; R. Simoniello, CERN
+ * @author F. Meloni, DESY;
  * @version $Id: CaloHitSelector.h,v 0.1 2020-09-27 11:24:21 fmeloni Exp $
  */
 
@@ -65,19 +66,16 @@ protected:
   std::string m_inputRelationCollection = "";
   std::string m_outputRelationCollection = "";
 
-  int m_Nlayer = 50;
   int m_Nsigma = 3;
-  std::vector<double> arrBins_theta = {0., 30. * TMath::Pi() / 180., 40. * TMath::Pi() / 180., 50. * TMath::Pi() / 180., 60. * TMath::Pi() / 180., 70. * TMath::Pi() / 180.,
-                                       90. * TMath::Pi() / 180., 110. * TMath::Pi() / 180., 120. * TMath::Pi() / 180., 130. * TMath::Pi() / 180., 140. * TMath::Pi() / 180., 150. * TMath::Pi() / 180., TMath::Pi()};
-
-  bool m_fillHistos = false;
+  std::string m_thFile = "";
 
   int _nRun{};
   int _nEvt{};
 
   // --- Output threshold histograms:
+  TFile *m_th_file = nullptr;
   TH2D *m_thresholdMap = nullptr;
-  TH2D *m_correctionMap = nullptr;
+  TH2D *m_stddevMap = nullptr;
 };
 
 #endif

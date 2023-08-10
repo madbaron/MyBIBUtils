@@ -1,0 +1,7 @@
+# ECAL thresholds
+INSTALL(FILES ECAL_Thresholds.root
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/MyBIBUtils/data)
+
+# HCAL thresholds
+INSTALL(FILES HCAL_Thresholds.root
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/MyBIBUtils/data)

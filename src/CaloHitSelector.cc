@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <math.h>
+#include <filesystem>
 
 #include <EVENT/LCCollection.h>
 #include <EVENT/CalorimeterHit.h>
@@ -14,8 +15,6 @@
 #include <UTIL/CellIDEncoder.h>
 #include <UTIL/LCTrackerConf.h>
 #include <IMPL/LCRelationImpl.h>
-
-#include <marlin/AIDAProcessor.h>
 
 #include "TH1D.h"
 #include "TVector3.h"
@@ -58,23 +57,17 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                m_outputRelationCollection,
                                std::string("EcalBarrelRelationsSimSel"));
 
-    // N calo layers
-    registerProcessorParameter("Nlayers",
-                               "Number of calorimeter layers",
-                               m_Nlayer,
-                               50);
+    // ROOT map
+    registerProcessorParameter("ECAL_Thresholds.root",
+                               "Path to ROOT file",
+                               m_thFile,
+                               std::string(""));
 
     // N sigma for dynamic threshold
     registerProcessorParameter("Nsigma",
                                "Number of BIB E sigma",
                                m_Nsigma,
                                3);
-
-    // Save histograms
-    registerProcessorParameter("SaveHistograms",
-                               "Flag to save the threshold histograms",
-                               m_fillHistos,
-                               false);
 }
 
 void CaloHitSelector::init()
@@ -88,13 +81,10 @@ void CaloHitSelector::init()
     _nRun = 0;
     _nEvt = 0;
 
-    // --- Initialize the AIDAProcessor and book the diagnostic histograms:
-
-    AIDAProcessor::histogramFactory(this);
-
-    size_t nThetaBins = arrBins_theta.size() - 1;
-    m_thresholdMap = new TH2D("Threshold_vs_theta_layer", "Threshold_vs_theta_layer", nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
-    m_correctionMap = new TH2D("Correction_vs_theta_layer", "Correction_vs_theta_layer", nThetaBins, 0, nThetaBins, m_Nlayer, 0, m_Nlayer);
+    // open ROOT file and get threshold histograms
+    m_th_file = new TFile(m_thFile.c_str());
+    m_thresholdMap = (TH2D *)m_th_file->Get("th_2dmode_sym");
+    m_stddevMap = (TH2D *)m_th_file->Get("stddev_sym");
 }
 
 void CaloHitSelector::processRunHeader(LCRunHeader *run)
@@ -130,55 +120,7 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     LCFlagImpl lcFlag_rel(inputHitRel->getFlag());
     outputHitRel->setFlag(lcFlag_rel.getFlag());
 
-    std::vector<TH2D *> layer_map;
-    for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
-    {
-        TString name;
-        name.Form("%s%s%i", m_inputHitCollection, "hit_E_vs_theta_layer_", iLayer);
-        TH2D *histo = new TH2D(name, name, arrBins_theta.size() - 1, arrBins_theta.data(), 100, 0, 0.1);
-        layer_map.push_back(histo);
-    }
-
-    // Loop over calo hits
     int nHits = caloHitCollection->getNumberOfElements();
-    for (int itHit = 0; itHit < nHits; itHit++)
-    {
-        // Get the hit
-        CalorimeterHit *hit = static_cast<CalorimeterHit *>(caloHitCollection->getElementAt(itHit));
-        unsigned int layer = myCellIDEncoding(hit)["layer"];
-
-        streamlog_out(DEBUG0) << " " << std::endl;
-        streamlog_out(DEBUG0) << " Found hit L " << layer << std::endl;
-
-        // hit position
-        TVector3 hitPos(hit->getPosition()[0], hit->getPosition()[1], hit->getPosition()[2]);
-        double hit_theta = hitPos.Theta();
-
-        streamlog_out(DEBUG0) << " E " << hit->getEnergy() << " theta " << hit_theta << std::endl;
-
-        layer_map[layer]->Fill(hit_theta, hit->getEnergy());
-    }
-
-    // Now extract thresholds
-    std::vector<std::vector<double>> threshold_map;
-    std::vector<std::vector<double>> correction_map;
-    for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
-    {
-        std::vector<double> threshold_map_theta;
-        std::vector<double> correction_map_theta;
-        size_t maxBin = arrBins_theta.size() - 1;
-        for (size_t iBin = 0; iBin < maxBin; iBin++)
-        {
-            TString name_proj;
-            name_proj.Form("%s%li", "_py_", iBin);
-            TH1D *h_my_proj = layer_map[iLayer]->ProjectionY(name_proj, iBin, iBin + 1);
-            threshold_map_theta.push_back(h_my_proj->GetMean() + m_Nsigma * h_my_proj->GetStdDev());
-            correction_map_theta.push_back(h_my_proj->GetMean());
-            delete h_my_proj;
-        }
-        threshold_map.push_back(threshold_map_theta);
-        correction_map.push_back(correction_map_theta);
-    }
 
     // Now loop over hits again applying threshold
     for (int itHit = 0; itHit < nHits; itHit++)
@@ -190,10 +132,18 @@ void CaloHitSelector::processEvent(LCEvent *evt)
         // hit position
         TVector3 hitPos(hit->getPosition()[0], hit->getPosition()[1], hit->getPosition()[2]);
         double hit_theta = hitPos.Theta();
+        if (hit_theta > TMath::Pi() / 2) // map is symmetrized around pi/2
+        {
+            hit_theta = TMath::Pi() - hit_theta;
+        }
 
-        unsigned int binx = layer_map[layer]->GetXaxis()->FindBin(hit_theta);
+        unsigned int binx = m_thresholdMap->GetXaxis()->FindBin(hit_theta);
+        unsigned int biny = m_thresholdMap->GetYaxis()->FindBin(layer);
 
-        if (hit->getEnergy() > threshold_map[layer][binx - 1])
+        double threshold = m_thresholdMap->GetBinContent(binx, biny) + m_Nsigma * m_stddevMap->GetBinContent(binx, biny);
+        double correction = m_thresholdMap->GetBinContent(binx, biny);
+
+        if (hit->getEnergy() > threshold)
         {
             streamlog_out(DEBUG0) << " accepted hit " << hit->getEnergy() << " theta " << hit_theta << std::endl;
 
@@ -205,7 +155,7 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             hit_new->setRawHit(hit->getRawHit());
             hit_new->setPosition(hit->getPosition());
             hit_new->setTime(hit->getTime());
-            hit_new->setEnergy(hit->getEnergy() - correction_map[layer][binx - 1]);
+            hit_new->setEnergy(hit->getEnergy() - correction);
             hit_new->setEnergyError(hit->getEnergyError());
 
             GoodHitsCollection->addElement(hit_new);
@@ -218,19 +168,6 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             rel_new->setWeight(rel->getWeight());
 
             outputHitRel->addElement(rel_new);
-        }
-    }
-
-    if (m_fillHistos)
-    {
-        for (int iLayer = 0; iLayer < m_Nlayer; iLayer++)
-        {
-            size_t maxBin = arrBins_theta.size() - 1;
-            for (size_t iBin = 0; iBin < maxBin; iBin++)
-            {
-                m_thresholdMap->Fill(iBin, iLayer, threshold_map[iLayer][iBin]);
-                m_correctionMap->Fill(iBin, iLayer, correction_map[iLayer][iBin]);
-            }
         }
     }
 
@@ -255,6 +192,7 @@ void CaloHitSelector::end()
     //   std::cout << "CaloHitSelector::end()  " << name()
     // 	    << " processed " << _nEvt << " events in " << _nRun << " runs "
     // 	    << std::endl ;
+    m_th_file->Close();
 }
 
 void CaloHitSelector::getCollection(LCCollection *&collection, const std::string &collectionName, LCEvent *evt)
