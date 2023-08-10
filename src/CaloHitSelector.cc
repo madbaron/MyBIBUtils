@@ -58,7 +58,7 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                std::string("EcalBarrelRelationsSimSel"));
 
     // ROOT map
-    registerProcessorParameter("ECAL_Thresholds.root",
+    registerProcessorParameter("ThresholdsFilePath",
                                "Path to ROOT file",
                                m_thFile,
                                std::string(""));
