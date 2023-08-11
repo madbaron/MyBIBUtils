@@ -99,8 +99,8 @@ void CaloHitSelector::processRunHeader(LCRunHeader *run)
 void CaloHitSelector::processEvent(LCEvent *evt)
 {
 
-    std::cout << "Processing event " << _nEvt << std::endl;
-    std::cout << " in " << this->name() << std::endl;
+    streamlog_out(DEBUG) << "Processing event " << _nEvt << std::endl;
+    streamlog_out(DEBUG) << " in " << this->name() << std::endl;
 
     // Get the collection of calo hits
     LCCollection *caloHitCollection = 0;
