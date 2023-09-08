@@ -119,7 +119,7 @@ void CaloHitSelector::processEvent(LCEvent *evt)
         LCCollectionVec *GoodHitsCollection = new LCCollectionVec(LCIO::CALORIMETERHIT);
         // GoodHitsCollection->setSubset(false);
         GoodHitsCollection->parameters().setValue(LCIO::CellIDEncoding, encoderString);
-        GoodHitsCollection->setFlag(caloHitCollection.getFlag());
+        GoodHitsCollection->setFlag(caloHitCollection->getFlag());
 
         // reco-sim relation output collections
         LCCollectionVec *outputHitRel = new LCCollectionVec(LCIO::LCRELATION);
