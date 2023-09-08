@@ -112,18 +112,19 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     if (caloHitCollection != 0 && inputHitRel != 0)
     {
 
-        std::string encoderString = caloHitCollection->getParameters().getStringVal("CellIDEncoding");
+        std::string encoderString = caloHitCollection->getParameters().getStringVal(LCIO::CellIDEncoding);
         UTIL::CellIDDecoder<CalorimeterHit> myCellIDEncoding(encoderString);
 
         // Make the output collections
-        LCCollectionVec *GoodHitsCollection = new LCCollectionVec("CalorimeterHit");
-        GoodHitsCollection->setSubset(false);
-        GoodHitsCollection->parameters().setValue("CellIDEncoding", encoderString);
+        LCCollectionVec *GoodHitsCollection = new LCCollectionVec(LCIO::CALORIMETERHIT);
+        // GoodHitsCollection->setSubset(false);
+        GoodHitsCollection->parameters().setValue(LCIO::CellIDEncoding, encoderString);
+        GoodHitsCollection->setFlag(caloHitCollection.getFlag());
 
         // reco-sim relation output collections
-        LCCollectionVec *outputHitRel = new LCCollectionVec("LCRelation");
-        outputHitRel->parameters().setValue("FromType", "CalorimeterHit");
-        outputHitRel->parameters().setValue("ToType", "SimCalorimeterHit");
+        LCCollectionVec *outputHitRel = new LCCollectionVec(LCIO::LCRELATION);
+        outputHitRel->parameters().setValue("FromType", LCIO::CALORIMETERHIT);
+        outputHitRel->parameters().setValue("ToType", LCIO::SIMCALORIMETERHIT);
         LCFlagImpl lcFlag_rel(inputHitRel->getFlag());
         outputHitRel->setFlag(lcFlag_rel.getFlag());
 
