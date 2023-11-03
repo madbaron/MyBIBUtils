@@ -68,6 +68,12 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                "Number of BIB E sigma",
                                m_Nsigma,
                                3);
+
+    // Subtract expected BIB energy
+    registerProcessorParameter("DoBIBsubtraction",
+                               "Correct cell energy for mean expected BIB contribution",
+                               m_doBIBsubtraction,
+                               bool(false));
 }
 
 void CaloHitSelector::init()
@@ -163,7 +169,14 @@ void CaloHitSelector::processEvent(LCEvent *evt)
                 hit_new->setRawHit(hit->getRawHit());
                 hit_new->setPosition(hit->getPosition());
                 hit_new->setTime(hit->getTime());
-                hit_new->setEnergy(hit->getEnergy() - correction);
+                if (m_doBIBsubtraction)
+                {
+                    hit_new->setEnergy(hit->getEnergy() - correction);
+                }
+                else
+                {
+                    hit_new->setEnergy(hit->getEnergy());
+                }
                 hit_new->setEnergyError(hit->getEnergyError());
 
                 GoodHitsCollection->addElement(hit_new);

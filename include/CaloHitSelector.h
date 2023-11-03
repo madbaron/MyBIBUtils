@@ -68,6 +68,7 @@ protected:
 
   int m_Nsigma = 3;
   std::string m_thFile = "";
+  bool m_doBIBsubtraction = false;
 
   int _nRun{};
   int _nEvt{};
