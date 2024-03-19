@@ -67,6 +67,7 @@ protected:
   std::string m_outputRelationCollection = "";
 
   int m_Nsigma = 3;
+  double m_FlatThreshold = 0.;
   std::string m_thFile = "";
   bool m_doBIBsubtraction = false;
 

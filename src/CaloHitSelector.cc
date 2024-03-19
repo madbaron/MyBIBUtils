@@ -69,6 +69,12 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                m_Nsigma,
                                3);
 
+    // Fixed threshold
+    registerProcessorParameter("FlatThreshold",
+                               "Cut in GeV",
+                               m_FlatThreshold,
+                               0.);
+
     // Subtract expected BIB energy
     registerProcessorParameter("DoBIBsubtraction",
                                "Correct cell energy for mean expected BIB contribution",
@@ -155,11 +161,22 @@ void CaloHitSelector::processEvent(LCEvent *evt)
             unsigned int biny = m_thresholdMap->GetYaxis()->FindBin(layer);
 
             double threshold = m_thresholdMap->GetBinContent(binx, biny) + m_Nsigma * m_stddevMap->GetBinContent(binx, biny);
+            if (m_FlatThreshold > 0.)
+            {
+                threshold = m_FlatThreshold;
+            }
+
             double correction = m_thresholdMap->GetBinContent(binx, biny);
 
-            if (hit->getEnergy() > threshold)
+            double hit_energy = hit->getEnergy();
+            if (m_doBIBsubtraction)
             {
-                streamlog_out(DEBUG0) << " accepted hit " << hit->getEnergy() << " theta " << hit_theta << std::endl;
+                hit_energy = hit_energy - correction;
+            }
+
+            if (hit_energy > threshold)
+            {
+                streamlog_out(DEBUG0) << " accepted hit " << hit_energy << " theta " << hit_theta << std::endl;
 
                 CalorimeterHitImpl *hit_new = new CalorimeterHitImpl();
 
@@ -169,14 +186,7 @@ void CaloHitSelector::processEvent(LCEvent *evt)
                 hit_new->setRawHit(hit->getRawHit());
                 hit_new->setPosition(hit->getPosition());
                 hit_new->setTime(hit->getTime());
-                if (m_doBIBsubtraction)
-                {
-                    hit_new->setEnergy(hit->getEnergy() - correction);
-                }
-                else
-                {
-                    hit_new->setEnergy(hit->getEnergy());
-                }
+                hit_new->setEnergy(hit_energy);
                 hit_new->setEnergyError(hit->getEnergyError());
 
                 GoodHitsCollection->addElement(hit_new);
