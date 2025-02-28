@@ -1,4 +1,4 @@
-#include "CaloHitSelector.h"
+#include "CaloConer.h"
 #include <iostream>
 #include <vector>
 #include <map>
@@ -8,16 +8,16 @@
 #include <EVENT/LCCollection.h>
 #include <EVENT/CalorimeterHit.h>
 #include <EVENT/SimCalorimeterHit.h>
+#include <EVENT/MCParticle.h>
 
 #include <UTIL/LCRelationNavigator.h>
 #include <IMPL/LCCollectionVec.h>
 
 #include <UTIL/CellIDDecoder.h>
 #include <UTIL/CellIDEncoder.h>
-#include <UTIL/LCTrackerConf.h>
 #include <IMPL/LCRelationImpl.h>
 
-#include "TH1D.h"
+#include "TLorentzVector.h"
 #include "TVector3.h"
 
 // ----- include for verbosity dependend logging ---------
@@ -26,13 +26,19 @@
 using namespace lcio;
 using namespace marlin;
 
-CaloHitSelector aCaloHitSelector;
+CaloConer aCaloConer;
 
-CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
+CaloConer::CaloConer() : Processor("CaloConer")
 {
 
     // Modify processor description
-    _description = "CaloHitSelector applies E selections to reduce the BIB";
+    _description = "CaloConer keeps only calo hits within fixed deltaR of MC truth";
+
+    // Input collection
+    registerProcessorParameter("MCParticleCollectionName",
+                               "Name of the MCParticle input collection",
+                               m_inputMCParticleCollection,
+                               std::string("MCParticle"));
 
     // Input collection
     registerProcessorParameter("CaloHitCollectionName",
@@ -44,7 +50,7 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
     registerProcessorParameter("GoodHitCollection",
                                "Good hits from calo",
                                m_outputHitCollection,
-                               std::string("EcalBarrelCollectionSel"));
+                               std::string("EcalBarrelCollectionConed"));
 
     // Input relation collection
     registerProcessorParameter("CaloRelationCollectionName",
@@ -56,34 +62,16 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
     registerProcessorParameter("GoodRelationCollection",
                                "Good hits SimRec relations",
                                m_outputRelationCollection,
-                               std::string("EcalBarrelRelationsSimSel"));
+                               std::string("EcalBarrelRelationsSimConed"));
 
-    // ROOT map
-    registerProcessorParameter("ThresholdsFilePath",
-                               "Path to ROOT file",
-                               m_thFile,
-                               std::string(""));
-
-    // N sigma for dynamic threshold
-    registerProcessorParameter("Nsigma",
-                               "Number of BIB E sigma",
-                               m_Nsigma,
-                               3);
-
-    // Fixed threshold
-    registerProcessorParameter("FlatThreshold",
-                               "Cut in GeV",
-                               m_FlatThreshold,
-                               0.);
-
-    // Subtract expected BIB energy
-    registerProcessorParameter("DoBIBsubtraction",
-                               "Correct cell energy for mean expected BIB contribution",
-                               m_doBIBsubtraction,
-                               bool(false));
+    // Cone size
+    registerProcessorParameter("ConeWidth",
+                               "Cut in radians",
+                               m_ConeSize,
+                               0.2);
 }
 
-void CaloHitSelector::init()
+void CaloConer::init()
 {
 
     streamlog_out(DEBUG) << "   init called  " << std::endl;
@@ -94,26 +82,23 @@ void CaloHitSelector::init()
     _nRun = 0;
     _nEvt = 0;
 
-    // open ROOT file and get threshold histograms
-    m_th_file = new TFile(m_thFile.c_str());
-    m_thresholdMap = (TH2D *)m_th_file->Get("th_2dmode_sym");
-    m_thresholdMap->SetDirectory(0);
-    m_stddevMap = (TH2D *)m_th_file->Get("stddev_sym");
-    m_stddevMap->SetDirectory(0);
-    m_th_file->Close();
 }
 
-void CaloHitSelector::processRunHeader(LCRunHeader *run)
+void CaloConer::processRunHeader(LCRunHeader *run)
 {
 
     _nRun++;
 }
 
-void CaloHitSelector::processEvent(LCEvent *evt)
+void CaloConer::processEvent(LCEvent *evt)
 {
 
     streamlog_out(DEBUG) << "Processing event " << _nEvt << std::endl;
     streamlog_out(DEBUG) << " in " << this->name() << std::endl;
+
+    // Get the collection of MCParticles
+    LCCollection *MCpartCollection = 0;
+    getCollection(MCpartCollection, m_inputMCParticleCollection, evt);
 
     // Get the collection of calo hits
     LCCollection *caloHitCollection = 0;
@@ -129,7 +114,6 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     {
 
         std::string encoderString = caloHitCollection->getParameters().getStringVal(LCIO::CellIDEncoding);
-        UTIL::CellIDDecoder<CalorimeterHit> myCellIDEncoding(encoderString);
 
         // Make the output collections
         outputHitCol = new LCCollectionVec(caloHitCollection->getTypeName());
@@ -145,37 +129,36 @@ void CaloHitSelector::processEvent(LCEvent *evt)
         for (int itHit = 0; itHit < nHits; itHit++)
         {
             // Get the hit
-            CalorimeterHit *hit = static_cast<CalorimeterHit *>(caloHitCollection->getElementAt(itHit));
-            unsigned int layer = myCellIDEncoding(hit)["layer"];
+            CalorimeterHit *hit = dynamic_cast<CalorimeterHit *>(caloHitCollection->getElementAt(itHit));
 
             // hit position
             TVector3 hitPos(hit->getPosition()[0], hit->getPosition()[1], hit->getPosition()[2]);
-            double hit_theta = hitPos.Theta();
-            if (hit_theta > TMath::Pi() / 2) // map is symmetrized around pi/2
+            bool save = false;
+
+            // Loop over MC particles and keep hit if within cone from particle 
+            int nParts = MCpartCollection->getNumberOfElements();
+            
+            for (int itPart = 0; itPart < nParts; itPart++)
             {
-                hit_theta = TMath::Pi() - hit_theta;
+                // Get MC part
+                MCParticle *part = dynamic_cast<MCParticle *>(MCpartCollection->getElementAt(itPart));
+                
+                // --- Keep only the generator-level particles:
+                if ( part->getGeneratorStatus() != 1 ) continue;
+                
+                TLorentzVector part_TLV(part->getMomentum()[0],part->getMomentum()[1],part->getMomentum()[2],part->getEnergy());
+
+                double deltaR = fabs(part_TLV.Angle(hitPos));
+                if(deltaR < m_ConeSize){
+                    save =  true;
+                    break;
+                }
+                
             }
 
-            unsigned int binx = m_thresholdMap->GetXaxis()->FindBin(hit_theta);
-            unsigned int biny = m_thresholdMap->GetYaxis()->FindBin(layer);
-
-            double threshold = m_thresholdMap->GetBinContent(binx, biny) + m_Nsigma * m_stddevMap->GetBinContent(binx, biny);
-            if (m_FlatThreshold > 0.)
+            if (save)
             {
-                threshold = m_FlatThreshold;
-            }
-
-            double correction = m_thresholdMap->GetBinContent(binx, biny);
-
-            double hit_energy = hit->getEnergy();
-            if (m_doBIBsubtraction)
-            {
-                hit_energy = hit_energy - correction;
-            }
-
-            if (hit_energy > threshold)
-            {
-                streamlog_out(DEBUG0) << " accepted hit " << hit_energy << " theta " << hit_theta << std::endl;
+                streamlog_out(DEBUG0) << " accepted hit " << std::endl;
 
                 outputHitCol->addElement(hit);
 
@@ -199,19 +182,19 @@ void CaloHitSelector::processEvent(LCEvent *evt)
     _nEvt++;
 }
 
-void CaloHitSelector::check(LCEvent *evt)
+void CaloConer::check(LCEvent *evt)
 {
     // nothing to check here - could be used to fill checkplots in reconstruction processor
 }
 
-void CaloHitSelector::end()
+void CaloConer::end()
 {
-    //   std::cout << "CaloHitSelector::end()  " << name()
+    //   std::cout << "CaloConer::end()  " << name()
     // 	    << " processed " << _nEvt << " events in " << _nRun << " runs "
     // 	    << std::endl ;
 }
 
-void CaloHitSelector::getCollection(LCCollection *&collection, const std::string &collectionName, LCEvent *evt)
+void CaloConer::getCollection(LCCollection *&collection, const std::string &collectionName, LCEvent *evt)
 {
     try
     {
