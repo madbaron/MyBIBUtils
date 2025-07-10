@@ -135,6 +135,8 @@ void CaloHitSelector::processEvent(LCEvent *evt)
         outputHitCol = new LCCollectionVec(caloHitCollection->getTypeName());
         outputHitCol->setSubset(true);
         outputHitCol->parameters().setValue(LCIO::CellIDEncoding, encoderString);
+        outputHitCol->setFlag(outputHitCol->getFlag() | (1 << EVENT::LCIO::CHBIT_LONG));
+        outputHitCol->setFlag(outputHitCol->getFlag() | (1 << EVENT::LCIO::RCHBIT_TIME));
 
         // reco-sim relation output collections
         UTIL::LCRelationNavigator thitNav = UTIL::LCRelationNavigator( LCIO::CALORIMETERHIT, LCIO::SIMCALORIMETERHIT );
