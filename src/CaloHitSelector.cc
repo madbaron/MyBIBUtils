@@ -19,6 +19,7 @@
 
 #include "TH1D.h"
 #include "TVector3.h"
+#include "TMath.h"
 
 // ----- include for verbosity dependend logging ---------
 #include "marlin/VerbosityLevels.h"
@@ -75,6 +76,18 @@ CaloHitSelector::CaloHitSelector() : Processor("CaloHitSelector")
                                "Cut in GeV",
                                m_FlatThreshold,
                                0.);
+
+    //TimeWindowMin
+    registerProcessorParameter("TimeWindowMin",
+                               "Minimum time window for hit selection",
+                               m_time_windowMin,
+                               -0.5);
+
+    //TimeWindowMax
+    registerProcessorParameter("TimeWindowMax",
+                               "Maximum time window for hit selection",
+                               m_time_windowMax,
+                               10.);
 
     // Subtract expected BIB energy
     registerProcessorParameter("DoBIBsubtraction",
@@ -177,14 +190,26 @@ void CaloHitSelector::processEvent(LCEvent *evt)
 
             if (hit_energy > threshold)
             {
-                streamlog_out(DEBUG0) << " accepted hit " << hit_energy << " theta " << hit_theta << std::endl;
+                // Compute time correction
+                float timeCorrection(0);
+                float r(0);
+                for (int i=0; i<3; i++)
+                    r+=pow(hit->getPosition()[i],2);
+                timeCorrection = sqrt(r)/TMath::C(); // [speed of light in mm/ns]
 
-                outputHitCol->addElement(hit);
+                float relativetime = hit->getTime() - timeCorrection; // wrt time of flight
 
-                LCRelation *rel = static_cast<LCRelation *>(inputHitRel->getElementAt(itHit));
-                SimCalorimeterHit *simhit = static_cast<SimCalorimeterHit *>(rel->getTo());
+                if (relativetime>m_time_windowMin && relativetime<m_time_windowMax){
 
-                thitNav.addRelation(hit, simhit);
+                    streamlog_out(DEBUG0) << " accepted hit " << hit_energy << " theta " << hit_theta << std::endl;
+
+                    outputHitCol->addElement(hit);
+
+                    LCRelation *rel = static_cast<LCRelation *>(inputHitRel->getElementAt(itHit));
+                    SimCalorimeterHit *simhit = static_cast<SimCalorimeterHit *>(rel->getTo());
+
+                    thitNav.addRelation(hit, simhit);
+                }
             }
         }
 
