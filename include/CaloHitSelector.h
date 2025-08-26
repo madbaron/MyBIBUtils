@@ -67,11 +67,11 @@ protected:
   std::string m_outputRelationCollection = "";
 
   int m_Nsigma = 3;
-  float m_FlatThreshold = 0.;
+  double m_FlatThreshold = 0.;
   std::string m_thFile = "";
   bool m_doBIBsubtraction = false;
-  float m_time_windowMin = -0.5;
-  float m_time_windowMax = 10.;
+  double m_time_windowMin = -0.5;
+  double m_time_windowMax = 10.;
 
   int _nRun{};
   int _nEvt{};
